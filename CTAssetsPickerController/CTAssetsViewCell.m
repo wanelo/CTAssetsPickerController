@@ -37,10 +37,12 @@
 @interface CTAssetsViewCell ()
 
 @property (nonatomic, strong) ALAsset *asset;
-@property (nonatomic, strong) UIImage *image;
 @property (nonatomic, copy) NSString *title;
 @property (nonatomic, strong) UIImage *videoImage;
-
+@property (nonatomic, strong) UIImageView *imageView;
+@property (nonatomic, strong) UIView *selectedOverlay;
+@property (nonatomic, strong) UIImageView *selectedIconView;
+@property (nonatomic, strong) UIView *disabledOverlay;
 @end
 
 
@@ -76,15 +78,42 @@ static UIColor *disabledColor;
         self.isAccessibilityElement = YES;
         self.accessibilityTraits    = UIAccessibilityTraitImage;
         self.enabled                = YES;
+        self.imageView              = [UIImageView new];
+        [self.contentView addSubview:self.imageView];
+        self.selectedOverlay        = [self setupSelectedOverlay];
+        self.selectedIconView       = [self setupSelectedIconView];
+        self.disabledOverlay        = [self setupDisabledOverlay];
     }
     
     return self;
 }
 
+- (UIView *)setupSelectedOverlay {
+    UIView *view = [UIView new];
+    view.backgroundColor = selectedColor;
+    [self.contentView addSubview:view];
+    view.hidden = YES;
+    return view;
+}
+
+- (UIImageView *)setupSelectedIconView {
+    UIImageView *imageView = [[UIImageView alloc] initWithImage:checkedIcon];
+    [self.selectedOverlay addSubview:imageView];
+    return imageView;
+}
+
+- (UIView *)setupDisabledOverlay {
+    UIView *view = [UIView new];
+    view.hidden = YES;
+    view.backgroundColor = disabledColor;
+    [self.contentView addSubview:view];
+    return view;
+}
+
 - (void)bind:(ALAsset *)asset
 {
     self.asset  = asset;
-    self.image  = (asset.thumbnail == NULL) ? [UIImage ctassetsPickerControllerImageNamed:@"CTAssetsPickerEmptyCell"] : [UIImage imageWithCGImage:asset.thumbnail];
+    self.imageView.image  = (asset.thumbnail == NULL) ? [UIImage ctassetsPickerControllerImageNamed:@"CTAssetsPickerEmptyCell"] : [UIImage imageWithCGImage:asset.thumbnail];
     
     if ([self.asset isVideo])
     {
@@ -96,31 +125,46 @@ static UIColor *disabledColor;
 - (void)setSelected:(BOOL)selected
 {
     [super setSelected:selected];
+    self.selectedOverlay.hidden = !selected;
     [self setNeedsDisplay];
 }
 
+- (void)setEnabled:(BOOL)enabled {
+    _enabled = enabled;
+    self.disabledOverlay.hidden = enabled;
+    [self setNeedsDisplay];
+}
 
 #pragma mark - Draw Rect
 
 - (void)drawRect:(CGRect)rect
 {
     [super drawRect:rect];
-    
-    [self drawThumbnailInRect:rect];
-    
+
     if ([self.asset isVideo])
         [self drawVideoMetaInRect:rect];
-    
-    if (!self.isEnabled)
-        [self drawDisabledViewInRect:rect];
-    
-    else if (self.selected)
-        [self drawSelectedViewInRect:rect];
 }
 
-- (void)drawThumbnailInRect:(CGRect)rect
-{
-    [self.image drawInRect:rect];
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGRect fullCellFrame = CGRectMake(
+            0,
+            0,
+            CGRectGetWidth(self.bounds),
+            CGRectGetHeight(self.bounds)
+    );
+    self.imageView.frame = fullCellFrame;
+    self.selectedOverlay.frame = fullCellFrame;
+    self.disabledOverlay.frame = fullCellFrame;
+    self.selectedIconView.frame = CGRectMake(
+            CGRectGetWidth(fullCellFrame) - CGRectGetWidth(self.selectedIconView.frame),
+            0,
+            CGRectGetWidth(self.selectedIconView.frame),
+            CGRectGetHeight(self.selectedIconView.frame)
+    );
+    self.imageView.hidden = self.imageView.image == nil;
+    self.disabledOverlay.hidden = self.isEnabled;
+    self.selectedOverlay.hidden = !self.selected;
 }
 
 - (void)drawVideoMetaInRect:(CGRect)rect
@@ -162,23 +206,6 @@ static UIColor *disabledColor;
     [videoIcon drawAtPoint:CGPointMake(4, startPoint.y + 1 + (titleHeight - videoIcon.size.height) / 2)];
 }
 
-- (void)drawDisabledViewInRect:(CGRect)rect
-{
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    CGContextSetFillColorWithColor(context, disabledColor.CGColor);
-    CGContextFillRect(context, rect);
-}
-
-- (void)drawSelectedViewInRect:(CGRect)rect
-{
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    CGContextSetFillColorWithColor(context, selectedColor.CGColor);
-    CGContextFillRect(context, rect);
-    
-    [checkedIcon drawAtPoint:CGPointMake(CGRectGetMaxX(rect) - checkedIcon.size.width, CGRectGetMinY(rect))];
-}
-
-
 #pragma mark - Accessibility Label
 
 - (NSString *)accessibilityLabel
@@ -186,4 +213,9 @@ static UIColor *disabledColor;
     return self.asset.accessibilityLabel;
 }
 
+- (void)prepareForReuse {
+    [super prepareForReuse];
+    self.selectedOverlay.hidden = YES;
+    self.disabledOverlay.hidden = YES;
+}
 @end
